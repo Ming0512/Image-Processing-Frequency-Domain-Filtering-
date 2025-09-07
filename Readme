@@ -1,0 +1,51 @@
+
+Frequency domain filtering 
+
+Part 1: 
+2D FFT and Filtering
+Load and Display the Image:
+
+The script begins by loading a grayscale image using OpenCV and displays it using Matplotlib.
+1D and 2D FFT Implementation:
+
+The script implements 1D FFT using the Cooley-Tukey algorithm and then applies it row-wise and column-wise to perform 2D FFT on the image.
+Magnitude and Phase Spectrum:
+
+After performing the FFT, the script calculates and displays the magnitude and phase spectra of the transformed image.
+Inverse FFT:
+
+The script also implements the inverse FFT to reconstruct the original image from the FFT data.
+Filter Implementation:
+
+The script provides functions to apply Ideal, Gaussian, and Butterworth low-pass and high-pass filters in the frequency domain.
+Apply Filters:
+
+The script prompts the user to choose a filter type and parameters, applies the filter, and then reconstructs the filtered image using the inverse FFT.
+
+Part 2: 
+Creating an Illusion Image
+
+This part of the script combines two images (Einstein and Marilyn) by applying a low-pass filter to one image and a high-pass filter to the other, resulting in a hybrid illusion image.
+Display the Illusion Image:
+
+Part 3: 
+Noise Removal from Images
+Noise Removal in the Frequency Domain:
+
+The script removes striped noise from a noisy image by identifying and zeroing out high-frequency components outside a specified region in the frequency domain.
+Display the Noise-Removed Image:
+
+After applying the noise removal, the script reconstructs and displays the cleaned image.
+
+
+
+Discussion:
+
+Periodic noise in images refers to regular, repeating patterns or artifacts that appear due to systematic disturbances or interference. This type of noise often manifests as repetitive lines, stripes, or grids, and can be caused by various factors:
+
+Electronic Interference: In digital cameras, periodic noise might result from interference in the sensor electronics or signal processing.
+Scanning Artifacts: When scanning documents or images, periodic noise can occur due to imperfections or malfunctions in the scanner hardware.
+Environmental Factors: External sources like fluorescent lighting can introduce regular patterns in images, especially if the lighting frequency matches the image capture rate.
+Improper Filtering: Insufficient or incorrect filtering during image processing might also lead to periodic noise artifacts.
+
+
