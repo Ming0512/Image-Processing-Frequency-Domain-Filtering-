@@ -1,0 +1,317 @@
+
+PART 1
+"""
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+img = cv2.imread('/content/cameraman.jpg',cv2.IMREAD_GRAYSCALE)
+plt.imshow(img, cmap = 'gray',vmin = 0, vmax = 255)
+plt.title('Original Image')
+plt.axis('on')
+print(img)
+print(img.shape)
+
+"""1D FFT"""
+
+def fft1d(x):
+    # Compute the 1D Fast Fourier Transform of a input signal using the Cooley-Tukey algorithm.
+    N = len(x)
+    if N <= 1:
+        return x
+    # Check if length is a power of 2
+    if (N & (N - 1)) != 0:
+        # If not, find the next power of 2 greater than N
+        next_power_of_2 = 2**int(np.ceil(np.log2(N)))
+        # Pad x with zeros to reach the next power of 2
+        x = np.pad(x, (0, next_power_of_2 - N), mode='constant')
+        N = next_power_of_2
+    # Compute FFT of even and odd indexed elements
+    even_FFT = fft1d(x[::2])
+    odd_FFT = fft1d(x[1::2])
+    # Combine results
+    T = np.exp(-2j * np.pi * np.arange(N // 2) / N) * odd_FFT
+    return np.concatenate([even_FFT + T, even_FFT - T])
+
+"""2D FFT using 1D FFT"""
+
+# 2D FFT using 1D FFT rowwise followed by column of transformed row
+def fft2d_rowwise(img_array):
+  return np.array([fft1d(row) for row in img_array])
+def ff2d_columnwise(row_transformed):
+  return np.array([fft1d(col) for col in row_transformed.T]).T
+
+"""Calling Function"""
+
+def fft_of_image(img_array):
+  row_transformed = fft2d_rowwise(img_array)
+  column_transformed = ff2d_columnwise(row_transformed)
+  # Centering the FFT
+  centered_fft = np.fft.fftshift(column_transformed)
+  return centered_fft
+
+centered_fft = fft_of_image(img)
+
+"""Magnitude and Phase Spectrum
+
+"""
+
+def spectrum(centered_fft):
+  # For magnitude spectrum
+  magnitude_spectrum = abs(centered_fft)
+  plt.imshow(np.log(1+magnitude_spectrum), cmap = 'gray', aspect = 'auto')
+  plt.title('2D FFT Magnitude Spectrum')
+  plt.axis('on')
+  plt.show()
+
+  # For phase spectrum
+  phase_spectrum = np.angle(centered_fft)
+  plt.imshow(phase_spectrum, cmap= 'gray', aspect='auto')
+  plt.title('Phase Spectrum')
+  plt.axis('on')
+  plt.show()
+
+spectrum(centered_fft)
+
+"""INVERSE FFT"""
+
+def ifft1d(x):
+    # Compute the 1D Fast Fourier Transform of a input signal using the Cooley-Tukey algorithm.
+    N = len(x)
+    if N <= 1:
+        return x
+    # Check if the length is a power of 2
+    if (N & (N - 1)) != 0:
+        # If not, find the next power of 2 greater than N
+        next_power_of_2 = 2**int(np.ceil(np.log2(N)))
+        # Pad x with zeros to reach the next power of 2
+        x = np.pad(x, (0, next_power_of_2 - N), mode='constant')
+        N = next_power_of_2
+    even_IFFT = ifft1d(x[::2])
+    odd_IFFT = ifft1d(x[1::2])
+    T = np.exp(2j * np.pi * np.arange(N // 2) / N) * odd_IFFT
+    return np.concatenate([even_IFFT + T, even_IFFT - T]) / 2
+
+# Apply 1D IFFT to each row
+def ifft2d_rowwise(image_array):
+    return np.array([ifft1d(row) for row in image_array])
+
+# Apply 1D Inverse IFFT to each column
+def ifft2d_columnwise(transformed_row):
+    return np.array([ifft1d(col) for col in transformed_row.T]).T
+
+# Inverse FFT to get the image back
+def ifft(centered_fft2_shifted):
+   # Undo the fftshift
+    uncentered_fft2 = np.fft.ifftshift(centered_fft2_shifted)
+
+    # Apply Inverse FFT to each row of the transformed image
+    ifft2_shifted_row = ifft2d_rowwise(uncentered_fft2)
+
+    # Apply Inverse FFT to each column of the row-transformed result
+    ifft2_shifted = ifft2d_columnwise(ifft2_shifted_row)
+    return ifft2_shifted
+
+"""IDEAL LPF & HPF CHOOSING"""
+
+def ideal_lpf_filter(wc, M, N):
+  Huv = np.zeros((M,N))
+  for u in range(M):
+    for v in range(N):
+      if np.sqrt((u-M/2)**2 + (v-N/2)**2) <= wc:
+        Huv[u,v] = 1
+  return Huv
+
+def ideal_hpf_filter(wc, M, N):
+  Huv = np.zeros((M,N))
+  for u in range(M):
+    for v in range(N):
+      if np.sqrt((u-M/2)**2 + (v-N/2)**2) >= wc:
+        Huv[u,v] = 1
+  return Huv
+
+"""GAUSSIAN LPF & HPF CHOOSING"""
+
+def gaussian_lpf_filter(wc, M, N):
+    H = np.zeros((M, N))
+    for u in range(M):
+        for v in range(N):
+            D = np.sqrt((u - M / 2) ** 2 + (v - N / 2) ** 2)
+            H[u, v] = np.exp(-D**2 / (2 * wc ** 2))
+    return H
+
+def gaussian_hpf_filter(wc, M, N):
+    lowpass = gaussian_lpf_filter(wc, M, N)
+    delta  = np.ones((M, N))
+    H = delta - lowpass
+    return H
+
+"""BUTTERWORTH LPF & HPF CHOOSING"""
+
+def butterworth_lpf_filter(wc, M, N, n):
+  H = np.zeros((M, N))
+  for u in range(M):
+    for v in range(N):
+      D = np.sqrt((u - M / 2) ** 2 + (v - N / 2) ** 2)
+      H[u, v] = 1 / (1 + (D / wc) ** (2 * n))
+  return H
+
+def butterworth_hpf_filter(wc, M, N, n):
+  H = np.zeros((M, N))
+  for u in range(M):
+    for v in range(N):
+      D = np.sqrt((u - M / 2) ** 2 + (v - N / 2) ** 2)
+      if D!=0:
+        H[u, v] = 1 / (1 + (wc / D) ** (2 * n))
+  return H
+
+def apply_filter(filter, centered_fft):
+  filtered_fft = centered_fft * filter
+  filtered_fft = np.fft.ifftshift(filtered_fft)
+  return filtered_fft
+
+"""Main Calling Function"""
+
+M = centered_fft.shape[0]
+N = centered_fft.shape[1]
+global Huv
+
+filter_type = input("Enter the filter type (ideal/gaussian/butterworth): ")
+if(filter_type == 'ideal'):
+  loh = input("Enter the low or high (l/h): ")
+  wc = int(input("Enter the cutoff frequency: "))
+  if(loh == 'l'):
+    Huv = ideal_lpf_filter(wc, M, N)
+  else:
+    Huv = ideal_hpf_filter(wc, M, N)
+
+elif(filter_type == 'gaussian'):
+  loh = input("Enter the low or high (l/h): ")
+  wc = int(input("Enter the cutoff frequency: "))
+  if(loh == 'l'):
+    Huv = gaussian_lpf_filter(wc, M, N)
+  else:
+    Huv = gaussian_hpf_filter(wc, M, N)
+else:
+  loh = input("Enter the low or high (l/h): ")
+  wc = int(input("Enter the cutoff frequency: "))
+  n = int(input("Enter the order of the filter: "))
+  if(loh == 'l'):
+    Huv = butterworth_lpf_filter(wc, M, N, n)
+  else:
+    Huv = butterworth_hpf_filter(wc, M, N, n)
+
+filtered_fft = apply_filter(Huv, centered_fft)
+rec_version = ifft(filtered_fft)
+# Normalize the result (usually necessary after inverse FFT)
+# Take real part, as it should be a real image
+rec_img = np.abs(rec_version)
+plt.imshow(rec_img, cmap='gray')
+plt.title(f'Filtered Image at wc: {wc}')
+plt.axis('on')
+plt.show()
+print(rec_img.shape)
+
+"""PAART 2 : Creating Illusion Image"""
+
+def create_illusion(einstein, marilyn,wc):
+    # Fourier Transform of the images which is centered at origin
+    dft1 = fft_of_image(einstein)
+    dft2 = fft_of_image(marilyn)
+    M = dft1.shape[0]
+    N = dft1.shape[1]
+
+    # Apply the mask to the Fourier transformed images
+    low_pass = butterworth_lpf_filter(wc, M, N, 2) * dft1
+    high_pass = butterworth_hpf_filter(wc, M, N, 2) * dft2
+
+    # Inverse Fourier Transform to get the images back
+    low_pass_img = ifft(low_pass)
+    high_pass_img = ifft(high_pass)
+
+    # Combine the images
+    hybrid_img = np.abs(low_pass_img) + np.abs(high_pass_img)
+
+    return hybrid_img
+
+# Step 1: Load the images
+einstein = cv2.imread('/content/einstein.png', cv2.IMREAD_GRAYSCALE)
+marilyn = cv2.imread('/content/marilyn.png', cv2.IMREAD_GRAYSCALE)
+einstein = cv2.resize(einstein, (512, 512))
+marilyn = cv2.resize(marilyn, (512, 512))
+
+# Step 2: Create the illusion image
+cutoff_frequency = int(input("Enter the cutoff frequency: "))
+illusion_img = create_illusion(einstein, marilyn, cutoff_frequency)
+
+# plot the illusioned imafe
+plt.imshow(illusion_img, cmap='gray')
+plt.title('Illusion Image (Einstein and Marilyn)')
+plt.show()
+
+"""PART 3"""
+
+array = cv2.imread("/content/cameraman_noisy2.jpg",cv2.IMREAD_GRAYSCALE )
+fft2d = fft_of_image(array)
+
+def remove_vertical_and_diagonal_stripes(F):
+
+    # Get the magnitude spectrum for analysis
+    magnitude_spectrum = np.log(1 + np.abs(F))
+    # Image dimensions
+    P, Q = F.shape
+    notch_filter = np.ones((P, Q))
+
+    # Notch for vertical stripes (along horizontal axis in frequency domain)
+    vertical_cutoff_freq = 20
+    notch_width = 5  # Adjust as needed
+    notch_width_2 = 3
+    notch_width_3 = 2
+
+    for i in range(-notch_width, notch_width):
+        notch_filter[P//2, Q//2 + i] = 0  # Horizontal axis (vertical stripes)
+        notch_filter[P//2, Q//2 + i + vertical_cutoff_freq] = 0
+        notch_filter[P//2, Q//2 + i - vertical_cutoff_freq] = 0
+
+    # Notch for diagonal stripes (diagonal axes in frequency domain)
+    diagonal_cutoff_freq = 50  # Adjust as needed
+
+    for i in range(-diagonal_cutoff_freq, diagonal_cutoff_freq):
+        for j in range(-notch_width_2, notch_width_2):
+            notch_filter[P//2 + i, Q//2 + i + j] = 0  # Positive diagonal
+            notch_filter[P//2 - i, Q//2 - i - j] = 0  # Negative diagonal
+
+
+    diagonal_cutoff_freq_2 = 4  # Adjust as needed
+
+    for i in range(-diagonal_cutoff_freq_2, diagonal_cutoff_freq_2):
+        for j in range(-3, 3):
+            notch_filter[P//2 + i, Q//2 + i + j] = 1  # Positive diagonal
+            notch_filter[P//2 - i, Q//2 - i - j] = 1  # Negative diagonal
+
+    # Apply the notch filter to the frequency domain representation
+    F_filtered = F * notch_filter
+
+    # Perform inverse FFT to reconstruct the image
+    image_filtered = np.real(ifft(F_filtered))
+
+    # Display the results
+    plt.figure(figsize=(10, 10))
+
+    plt.subplot(2, 2, 1)
+    plt.imshow(magnitude_spectrum, cmap='gray')
+    plt.title('Magnitude Spectrum')
+
+    plt.subplot(2, 2, 2)
+    plt.imshow(notch_filter, cmap='gray')
+    plt.title('Notch Filter')
+
+    plt.subplot(2, 2, 3)
+    plt.imshow(image_filtered, cmap='gray')
+    plt.title('Restored Image')
+
+    plt.show()
+    return image_filtered
+
+remove_vertical_and_diagonal_stripes(fft2d)
